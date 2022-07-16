@@ -242,7 +242,6 @@ static MString* generate_geometry_shader(
                        "  gl_Position = gl_in[index].gl_Position;\n"
                        "  gl_PointSize = gl_in[index].gl_PointSize;\n"
                        "  vtx_inv_w = v_vtx_inv_w[index];\n"
-                       "  vtx_inv_w_flat = v_vtx_inv_w[index];\n"
                        "  vtxD0 = v_vtxD0[index];\n"
                        "  vtxD1 = v_vtxD1[index];\n"
                        "  vtxB0 = v_vtxB0[index];\n"
@@ -264,7 +263,6 @@ static MString* generate_geometry_shader(
                        "  gl_Position = gl_in[index].gl_Position;\n"
                        "  gl_PointSize = gl_in[index].gl_PointSize;\n"
                        "  vtx_inv_w = v_vtx_inv_w[index];\n"
-                       "  vtx_inv_w_flat = v_vtx_inv_w[provoking_index];\n"
                        "  vtxD0 = v_vtxD0[provoking_index];\n"
                        "  vtxD1 = v_vtxD1[provoking_index];\n"
                        "  vtxB0 = v_vtxB0[provoking_index];\n"
@@ -749,8 +747,7 @@ GLSL_DEFINE(materialEmissionColor, GLSL_LTCTXA(NV_IGRAPH_XF_LTCTXA_CM_COL) ".xyz
                    "    vtx_inv_w = 1.0;\n"
                    "  } else {\n"
                    "    vtx_inv_w = 1.0 / oPos.w;\n"
-                   "  }\n"
-                   "  vtx_inv_w_flat = vtx_inv_w;\n");
+                   "  }\n");
 }
 
 static MString *generate_vertex_shader(const ShaderState *state,
@@ -762,6 +759,7 @@ static MString *generate_vertex_shader(const ShaderState *state,
 "\n"
 "uniform vec2 clipRange;\n"
 "uniform vec2 surfaceSize;\n"
+"uniform vec2 glViewportSize;\n"
 "\n"
 /* All constants in 1 array declaration */
 "uniform vec4 c[" stringify(NV2A_VERTEXSHADER_CONSTANTS) "];\n"
@@ -801,7 +799,6 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
                                    STRUCT_V_VERTEX_DATA_OUT_FLAT);
         mstring_append(header,
                        "#define vtx_inv_w v_vtx_inv_w\n"
-                       "#define vtx_inv_w_flat v_vtx_inv_w_flat\n"
                        "#define vtxD0 v_vtxD0\n"
                        "#define vtxD1 v_vtxD1\n"
                        "#define vtxB0 v_vtxB0\n"
@@ -936,12 +933,11 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
     }
 
     /* Set outputs */
-    const char *shade_model_mult = state->smooth_shading ? "vtx_inv_w" : "vtx_inv_w_flat";
-    mstring_append_fmt(body, "\n"
-                      "  vtxD0 = clamp(oD0, 0.0, 1.0) * %s;\n"
-                      "  vtxD1 = clamp(oD1, 0.0, 1.0) * %s;\n"
-                      "  vtxB0 = clamp(oB0, 0.0, 1.0) * %s;\n"
-                      "  vtxB1 = clamp(oB1, 0.0, 1.0) * %s;\n"
+    mstring_append(body, "\n"
+                      "  vtxD0 = clamp(oD0, 0.0, 1.0) * vtx_inv_w;\n"
+                      "  vtxD1 = clamp(oD1, 0.0, 1.0) * vtx_inv_w;\n"
+                      "  vtxB0 = clamp(oB0, 0.0, 1.0) * vtx_inv_w;\n"
+                      "  vtxB1 = clamp(oB1, 0.0, 1.0) * vtx_inv_w;\n"
                       "  vtxFog = oFog.x * vtx_inv_w;\n"
                       "  vtxT0 = oT0 * vtx_inv_w;\n"
                       "  vtxT1 = oT1 * vtx_inv_w;\n"
@@ -950,11 +946,7 @@ GLSL_DEFINE(texMat3, GLSL_C_MAT4(NV_IGRAPH_XF_XFCTX_T3MAT))
                       "  gl_Position = oPos;\n"
                       "  gl_PointSize = oPts.x;\n"
                       "\n"
-                      "}\n",
-                       shade_model_mult,
-                       shade_model_mult,
-                       shade_model_mult,
-                       shade_model_mult);
+                      "}\n");
 
 
     /* Return combined header + source */
@@ -1118,6 +1110,7 @@ ShaderBinding *generate_shaders(const ShaderState *state)
     }
     ret->surface_size_loc = glGetUniformLocation(program, "surfaceSize");
     ret->clip_range_loc = glGetUniformLocation(program, "clipRange");
+    ret->gl_viewport_size_loc = glGetUniformLocation(program, "glViewportSize");
     ret->fog_color_loc = glGetUniformLocation(program, "fogColor");
     ret->fog_param_loc[0] = glGetUniformLocation(program, "fogParam[0]");
     ret->fog_param_loc[1] = glGetUniformLocation(program, "fogParam[1]");
